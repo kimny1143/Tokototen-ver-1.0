@@ -1,10 +1,11 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, BackgroundTasks
+from typing import List, Optional, Dict, Any, Union
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
 import uuid
 import logging
+import time
 from datetime import datetime
 
 from app.db.base import get_db
@@ -13,13 +14,18 @@ from app.models.user import User
 from app.models.audio import AudioFile, AnalysisResult
 from app.crud.audio import audio_file, analysis_result
 from app.tasks.audio_analysis import analyze_audio
+from app.services.ai_service import get_ai_service
 from app.schemas.audio import (
     AudioFileCreate,
     AudioFile as AudioFileSchema,
     AnalysisResultCreate,
     AnalysisResult as AnalysisResultSchema,
     AudioUploadResponse,
-    AudioAnalysisResponse
+    AudioAnalysisResponse,
+    MusicTheoryAnalysisResponse,
+    ProductionFeedbackResponse,
+    ArrangementAnalysisResponse,
+    AIAnalysisRequest
 )
 
 router = APIRouter()
@@ -112,12 +118,15 @@ def get_audio_file(
 async def analyze_audio_file(
     file_id: int,
     background_tasks: BackgroundTasks,
-    analysis_type: str = Form("general"),
+    analysis_request: AIAnalysisRequest = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Analyze an audio file
+    Analyze an audio file using AI services
+    
+    - **analysis_type**: Type of analysis to perform (general, music_theory, production_feedback, arrangement_analysis)
+    - **ai_service**: AI service to use (gemini, openai, or None for default)
     """
     # Get the audio file
     db_file = audio_file.get(db=db, id=file_id)
@@ -126,6 +135,9 @@ async def analyze_audio_file(
     
     if db_file.user_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    analysis_type = analysis_request.analysis_type
+    ai_service_name = analysis_request.ai_service
     
     existing_analysis = analysis_result.get_by_type(
         db=db, audio_file_id=file_id, analysis_type=analysis_type
@@ -138,33 +150,298 @@ async def analyze_audio_file(
             key=result.get("key", "C"),
             tempo=result.get("tempo", 120.0),
             time_signature=result.get("time_signature", "4/4"),
-            downbeats=result.get("downbeats", [])
+            downbeats=result.get("downbeats", []),
+            genre=result.get("genre"),
+            sound_quality=result.get("sound_quality"),
+            suggestions=result.get("suggestions")
         )
     
     try:
-        analysis_result_data = analyze_audio(db_file.file_path)
+        start_time = time.time()
+        
+        analysis_result_data = analyze_audio(
+            file_path=db_file.file_path,
+            analysis_type=analysis_type,
+            ai_service=ai_service_name
+        )
+        
+        processing_time = time.time() - start_time
         
         analysis_data = AnalysisResultCreate(
             audio_file_id=file_id,
             analysis_type=analysis_type,
             result=analysis_result_data,
-            confidence=0.85,
-            processing_time=1.2,
-            notes="Audio analysis result"
+            confidence=analysis_result_data.get("confidence", 0.85),
+            processing_time=processing_time,
+            notes=f"AI analysis using {ai_service_name or 'default'} service"
         )
         
         analysis_obj = analysis_result.create(db=db, obj_in=analysis_data)
         
         return AudioAnalysisResponse(
             file_id=str(db_file.id),
-            key=analysis_result_data["key"],
-            tempo=analysis_result_data["tempo"],
-            time_signature=analysis_result_data["time_signature"],
-            downbeats=analysis_result_data["downbeats"]
+            key=analysis_result_data.get("key", "C Major"),
+            tempo=analysis_result_data.get("tempo", 120.0),
+            time_signature=analysis_result_data.get("time_signature", "4/4"),
+            downbeats=analysis_result_data.get("downbeats", []),
+            genre=analysis_result_data.get("genre"),
+            sound_quality=analysis_result_data.get("sound_quality"),
+            suggestions=analysis_result_data.get("suggestions")
         )
     except Exception as e:
         logger.error(f"Error analyzing file: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error analyzing file")
+        raise HTTPException(status_code=500, detail=f"Error analyzing file: {str(e)}")
+
+
+@router.post("/analyze/music-theory/{file_id}", response_model=MusicTheoryAnalysisResponse)
+async def analyze_music_theory(
+    file_id: int,
+    background_tasks: BackgroundTasks,
+    ai_service: Optional[str] = Query(None, description="AI service to use (gemini, openai, or None for default)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Analyze music theory aspects of an audio file
+    
+    Returns detailed music theory analysis including:
+    - Key and scale identification
+    - Chord progression analysis
+    - Harmonic structure
+    - Suggestions for complementary chords
+    """
+    # Get the audio file
+    db_file = audio_file.get(db=db, id=file_id)
+    if not db_file:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    if db_file.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    analysis_type = "music_theory"
+    
+    existing_analysis = analysis_result.get_by_type(
+        db=db, audio_file_id=file_id, analysis_type=analysis_type
+    )
+    
+    if existing_analysis:
+        result = existing_analysis.result
+        return MusicTheoryAnalysisResponse(
+            file_id=str(db_file.id),
+            key=result.get("key", "C Major"),
+            tempo=result.get("tempo", 120.0),
+            time_signature=result.get("time_signature", "4/4"),
+            downbeats=result.get("downbeats", []),
+            scale=result.get("scale"),
+            chord_progression=result.get("chord_progression"),
+            harmonic_analysis=result.get("harmonic_analysis"),
+            suggestions=result.get("suggestions")
+        )
+    
+    try:
+        start_time = time.time()
+        
+        analysis_result_data = analyze_audio(
+            file_path=db_file.file_path,
+            analysis_type=analysis_type,
+            ai_service=ai_service
+        )
+        
+        processing_time = time.time() - start_time
+        
+        analysis_data = AnalysisResultCreate(
+            audio_file_id=file_id,
+            analysis_type=analysis_type,
+            result=analysis_result_data,
+            confidence=analysis_result_data.get("confidence", 0.85),
+            processing_time=processing_time,
+            notes=f"Music theory analysis using {ai_service or 'default'} service"
+        )
+        
+        analysis_obj = analysis_result.create(db=db, obj_in=analysis_data)
+        
+        return MusicTheoryAnalysisResponse(
+            file_id=str(db_file.id),
+            key=analysis_result_data.get("key", "C Major"),
+            tempo=analysis_result_data.get("tempo", 120.0),
+            time_signature=analysis_result_data.get("time_signature", "4/4"),
+            downbeats=analysis_result_data.get("downbeats", []),
+            scale=analysis_result_data.get("scale"),
+            chord_progression=analysis_result_data.get("chord_progression"),
+            harmonic_analysis=analysis_result_data.get("harmonic_analysis"),
+            suggestions=analysis_result_data.get("suggestions")
+        )
+    except Exception as e:
+        logger.error(f"Error analyzing music theory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing music theory: {str(e)}")
+
+
+@router.post("/analyze/production/{file_id}", response_model=ProductionFeedbackResponse)
+async def analyze_production(
+    file_id: int,
+    background_tasks: BackgroundTasks,
+    ai_service: Optional[str] = Query(None, description="AI service to use (gemini, openai, or None for default)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Analyze production aspects of an audio file
+    
+    Returns detailed production feedback including:
+    - Mix balance assessment
+    - EQ recommendations
+    - Dynamic processing suggestions
+    - Spatial effects recommendations
+    """
+    # Get the audio file
+    db_file = audio_file.get(db=db, id=file_id)
+    if not db_file:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    if db_file.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    analysis_type = "production_feedback"
+    
+    existing_analysis = analysis_result.get_by_type(
+        db=db, audio_file_id=file_id, analysis_type=analysis_type
+    )
+    
+    if existing_analysis:
+        result = existing_analysis.result
+        return ProductionFeedbackResponse(
+            file_id=str(db_file.id),
+            key=result.get("key", "C Major"),
+            tempo=result.get("tempo", 120.0),
+            time_signature=result.get("time_signature", "4/4"),
+            downbeats=result.get("downbeats", []),
+            mix_balance=result.get("mix_balance"),
+            eq_recommendations=result.get("eq_recommendations"),
+            dynamics_suggestions=result.get("dynamics_suggestions"),
+            spatial_recommendations=result.get("spatial_recommendations"),
+            suggestions=result.get("suggestions")
+        )
+    
+    try:
+        start_time = time.time()
+        
+        analysis_result_data = analyze_audio(
+            file_path=db_file.file_path,
+            analysis_type=analysis_type,
+            ai_service=ai_service
+        )
+        
+        processing_time = time.time() - start_time
+        
+        analysis_data = AnalysisResultCreate(
+            audio_file_id=file_id,
+            analysis_type=analysis_type,
+            result=analysis_result_data,
+            confidence=analysis_result_data.get("confidence", 0.85),
+            processing_time=processing_time,
+            notes=f"Production feedback analysis using {ai_service or 'default'} service"
+        )
+        
+        analysis_obj = analysis_result.create(db=db, obj_in=analysis_data)
+        
+        return ProductionFeedbackResponse(
+            file_id=str(db_file.id),
+            key=analysis_result_data.get("key", "C Major"),
+            tempo=analysis_result_data.get("tempo", 120.0),
+            time_signature=analysis_result_data.get("time_signature", "4/4"),
+            downbeats=analysis_result_data.get("downbeats", []),
+            mix_balance=analysis_result_data.get("mix_balance"),
+            eq_recommendations=analysis_result_data.get("eq_recommendations"),
+            dynamics_suggestions=analysis_result_data.get("dynamics_suggestions"),
+            spatial_recommendations=analysis_result_data.get("spatial_recommendations"),
+            suggestions=analysis_result_data.get("suggestions")
+        )
+    except Exception as e:
+        logger.error(f"Error analyzing production: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing production: {str(e)}")
+
+
+@router.post("/analyze/arrangement/{file_id}", response_model=ArrangementAnalysisResponse)
+async def analyze_arrangement(
+    file_id: int,
+    background_tasks: BackgroundTasks,
+    ai_service: Optional[str] = Query(None, description="AI service to use (gemini, openai, or None for default)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Analyze arrangement aspects of an audio file
+    
+    Returns detailed arrangement analysis including:
+    - Structure identification
+    - Instrumentation assessment
+    - Energy flow analysis
+    - Arrangement improvement suggestions
+    """
+    # Get the audio file
+    db_file = audio_file.get(db=db, id=file_id)
+    if not db_file:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    if db_file.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    analysis_type = "arrangement_analysis"
+    
+    existing_analysis = analysis_result.get_by_type(
+        db=db, audio_file_id=file_id, analysis_type=analysis_type
+    )
+    
+    if existing_analysis:
+        result = existing_analysis.result
+        return ArrangementAnalysisResponse(
+            file_id=str(db_file.id),
+            key=result.get("key", "C Major"),
+            tempo=result.get("tempo", 120.0),
+            time_signature=result.get("time_signature", "4/4"),
+            downbeats=result.get("downbeats", []),
+            structure=result.get("structure"),
+            instrumentation=result.get("instrumentation"),
+            energy_flow=result.get("energy_flow"),
+            suggestions=result.get("suggestions")
+        )
+    
+    try:
+        start_time = time.time()
+        
+        analysis_result_data = analyze_audio(
+            file_path=db_file.file_path,
+            analysis_type=analysis_type,
+            ai_service=ai_service
+        )
+        
+        processing_time = time.time() - start_time
+        
+        analysis_data = AnalysisResultCreate(
+            audio_file_id=file_id,
+            analysis_type=analysis_type,
+            result=analysis_result_data,
+            confidence=analysis_result_data.get("confidence", 0.85),
+            processing_time=processing_time,
+            notes=f"Arrangement analysis using {ai_service or 'default'} service"
+        )
+        
+        analysis_obj = analysis_result.create(db=db, obj_in=analysis_data)
+        
+        return ArrangementAnalysisResponse(
+            file_id=str(db_file.id),
+            key=analysis_result_data.get("key", "C Major"),
+            tempo=analysis_result_data.get("tempo", 120.0),
+            time_signature=analysis_result_data.get("time_signature", "4/4"),
+            downbeats=analysis_result_data.get("downbeats", []),
+            structure=analysis_result_data.get("structure"),
+            instrumentation=analysis_result_data.get("instrumentation"),
+            energy_flow=analysis_result_data.get("energy_flow"),
+            suggestions=analysis_result_data.get("suggestions")
+        )
+    except Exception as e:
+        logger.error(f"Error analyzing arrangement: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing arrangement: {str(e)}")
 
 
 @router.get("/analysis/{file_id}", response_model=List[AnalysisResultSchema])
