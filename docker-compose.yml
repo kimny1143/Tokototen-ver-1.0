@@ -24,8 +24,10 @@ services:
       - redis
     volumes:
       - ./server:/app
+    env_file:
+      - ./server/.env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/tokoroten
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-tokoroten_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-tokoroten}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -41,8 +43,10 @@ services:
     volumes:
       - ./server:/app
       - ./ai_models:/app/ai_models
+    env_file:
+      - ./server/.env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/tokoroten
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-tokoroten_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-tokoroten}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -51,10 +55,12 @@ services:
     image: postgres:15
     ports:
       - "5432:5432"
+    env_file:
+      - ./server/.env
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=tokoroten
+      - POSTGRES_USER=${POSTGRES_USER:-tokoroten_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-tokoroten}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
