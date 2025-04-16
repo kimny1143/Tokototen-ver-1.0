@@ -9,12 +9,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
     "axios": "^1.6.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "tone": "^14.7.77",
     "wavesurfer.js": "^7.3.1"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.0",
     "typescript": "^5.0.2",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }
