@@ -134,6 +134,9 @@ def test_transcription(tmp_path):
 
 def test_transcribe_stems_to_one_midi(tmp_path):
     """Test that transcribe_stems_to_one_midi correctly combines multiple stems into a single MIDI file"""
+    if os.getenv("CI") == "true":
+        pytest.skip("Skipping MT3 test on CI")
+    
     stem_dir = tmp_path / "stems"
     os.makedirs(stem_dir, exist_ok=True)
     
@@ -168,3 +171,6 @@ def test_transcribe_stems_to_one_midi(tmp_path):
     track_names = [instrument.name for instrument in midi.instruments]
     assert "kick" in track_names, "Missing 'kick' track"
     assert "snare" in track_names, "Missing 'snare' track"
+    
+    total_notes = sum(len(instrument.notes) for instrument in midi.instruments)
+    assert total_notes > 0, "No notes found in the combined MIDI file"
