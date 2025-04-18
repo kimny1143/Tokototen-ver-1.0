@@ -329,6 +329,9 @@ def save_midi(midi: pretty_midi.PrettyMIDI, output_path: Path) -> Path:
         track = mido.MidiTrack()
         mid.tracks.append(track)
         
+        if hasattr(instrument, 'name') and instrument.name:
+            track.append(mido.MetaMessage('track_name', name=instrument.name, time=0))
+        
         program = 0 if instrument.is_drum else instrument.program
         track.append(mido.Message('program_change', program=program, time=0))
         
@@ -377,9 +380,49 @@ def transcribe_and_save(stem_path: Path, output_dir: Path) -> Path:
     return output_path
 
 
+def transcribe_stems_to_one_midi(stem_dir: Path, output_path: Path) -> Path:
+    """
+    Transcribe all stem audio files in a directory to a single MIDI file with multiple tracks
+    
+    Args:
+        stem_dir: Directory containing stem audio files
+        output_path: Path to save the combined MIDI file to
+        
+    Returns:
+        Path to the saved MIDI file
+    """
+    combined_midi = pretty_midi.PrettyMIDI(initial_tempo=120.0)
+    combined_midi.resolution = 480
+    
+    os.makedirs(output_path.parent, exist_ok=True)
+    
+    stem_files = list(stem_dir.glob("*.wav"))
+    
+    for i, stem in enumerate(stem_files):
+        print(f"Transcribing stem {i+1}/{len(stem_files)}: {stem.stem}")
+        
+        # Transcribe the stem
+        midi = transcribe_stem(stem)
+        
+        time_shift = i * 0.001
+        
+        for instrument in midi.instruments:
+            instrument.name = stem.stem
+            
+            for note in instrument.notes:
+                note.start += time_shift
+                note.end += time_shift
+            
+            combined_midi.instruments.append(instrument)
+    
+    save_midi(combined_midi, output_path)
+    
+    return output_path
+
+
 def transcribe_and_save_all(stem_dir: Path, output_dir: Path) -> Dict[str, Path]:
     """
-    Transcribe all stem audio files in a directory to MIDI and save them
+    Transcribe all stem audio files in a directory to separate MIDI files
     
     Args:
         stem_dir: Directory containing stem audio files
@@ -388,6 +431,12 @@ def transcribe_and_save_all(stem_dir: Path, output_dir: Path) -> Dict[str, Path]
     Returns:
         Dictionary mapping stem names to MIDI file paths
     """
+    print("Warning: transcribe_and_save_all is deprecated. Use transcribe_stems_to_one_midi instead.")
+    
+    # Create a combined MIDI file
+    combined_path = output_dir / "combined.mid"
+    transcribe_stems_to_one_midi(stem_dir, combined_path)
+    
     mapping = {}
     
     os.makedirs(output_dir, exist_ok=True)
@@ -403,5 +452,7 @@ def transcribe_and_save_all(stem_dir: Path, output_dir: Path) -> Dict[str, Path]
         save_midi(midi, output_path)
         
         mapping[stem.stem] = output_path
+    
+    mapping["combined"] = combined_path
     
     return mapping

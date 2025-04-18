@@ -16,7 +16,7 @@ import soundfile as sf
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from app.services.transcription import transcribe_stem, save_midi, transcribe_and_save, transcribe_and_save_all
+from app.services.transcription import transcribe_stem, save_midi, transcribe_and_save, transcribe_and_save_all, transcribe_stems_to_one_midi
 
 
 @pytest.fixture
@@ -130,3 +130,41 @@ def test_transcription(tmp_path):
     
     assert len(midi.instruments[0].notes) > 0, "No notes in MIDI"
     assert midi.resolution == 480, f"Expected PPQ of 480, got {midi.resolution}"
+
+
+def test_transcribe_stems_to_one_midi(tmp_path):
+    """Test that transcribe_stems_to_one_midi correctly combines multiple stems into a single MIDI file"""
+    stem_dir = tmp_path / "stems"
+    os.makedirs(stem_dir, exist_ok=True)
+    
+    kick_wav = np.sin(2 * np.pi * 100 * np.linspace(0, 3, 48000))  # 3 seconds of 100Hz sine (kick)
+    snare_wav = np.sin(2 * np.pi * 300 * np.linspace(0, 3, 48000))  # 3 seconds of 300Hz sine (snare)
+    
+    sf.write(stem_dir / "kick.wav", kick_wav, 16000)
+    sf.write(stem_dir / "snare.wav", snare_wav, 16000)
+    
+    output_dir = tmp_path / "midi"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    start_time = time.time()
+    
+    output_path = transcribe_stems_to_one_midi(stem_dir, output_dir / "combined.mid")
+    
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    assert total_time <= 30, f"Transcription and combining took {total_time:.2f}s, which exceeds the 30s limit"
+    
+    assert output_path.exists(), f"Combined MIDI file {output_path} does not exist"
+    
+    midi = pretty_midi.PrettyMIDI(str(output_path))
+    
+    assert midi.resolution == 480, f"Expected PPQ of 480, got {midi.resolution}"
+    
+    assert abs(midi.get_tempo_changes()[1][0] - 120.0) < 1.0, f"Expected tempo of 120 BPM, got {midi.get_tempo_changes()[1][0]}"
+    
+    assert len(midi.instruments) >= 2, f"Expected at least 2 tracks, got {len(midi.instruments)}"
+    
+    track_names = [instrument.name for instrument in midi.instruments]
+    assert "kick" in track_names, "Missing 'kick' track"
+    assert "snare" in track_names, "Missing 'snare' track"
