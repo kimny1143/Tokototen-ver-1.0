@@ -9,3 +9,9 @@ try:
     __all__ += ["separate_stems"]
 except ImportError:
     pass
+
+try:
+    from app.services.transcription import transcribe_stem, save_midi, transcribe_and_save
+    __all__ += ["transcribe_stem", "save_midi", "transcribe_and_save"]
+except ImportError:
+    pass
