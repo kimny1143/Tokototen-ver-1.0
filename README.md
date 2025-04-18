@@ -75,6 +75,7 @@ Tokoroten（ところてん）は、音楽クリエイターのためのWebベ�
 - Node.js 18.x以上
 - Python 3.10以上
 - Docker, Docker Compose
+- GPU 推奨 (A10G / RTX4090) CPU 時は 4‑5× 遅延
 - （その他必要に応じて追加予定）
 
 ## 🚀 クイックスタート

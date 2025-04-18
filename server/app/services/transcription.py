@@ -369,6 +369,39 @@ def transcribe_and_save(stem_path: Path, output_dir: Path) -> Path:
     
     midi = transcribe_stem(stem_path)
     
+    for instrument in midi.instruments:
+        instrument.name = stem_path.stem
+    
     save_midi(midi, output_path)
     
     return output_path
+
+
+def transcribe_and_save_all(stem_dir: Path, output_dir: Path) -> Dict[str, Path]:
+    """
+    Transcribe all stem audio files in a directory to MIDI and save them
+    
+    Args:
+        stem_dir: Directory containing stem audio files
+        output_dir: Directory to save MIDI files to
+        
+    Returns:
+        Dictionary mapping stem names to MIDI file paths
+    """
+    mapping = {}
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for stem in stem_dir.glob("*.wav"):
+        # Transcribe the stem
+        midi = transcribe_stem(stem)
+        
+        for instrument in midi.instruments:
+            instrument.name = stem.stem
+        
+        output_path = output_dir / f"{stem.stem}.mid"
+        save_midi(midi, output_path)
+        
+        mapping[stem.stem] = output_path
+    
+    return mapping
