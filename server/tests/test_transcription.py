@@ -10,11 +10,13 @@ import pytest
 import torch
 import torchaudio
 import pretty_midi
+import librosa
+import soundfile as sf
 
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from app.services.transcription import transcribe_stem, save_midi, transcribe_and_save
+from app.services.transcription import transcribe_stem, save_midi, transcribe_and_save, transcribe_and_save_all
 
 
 @pytest.fixture
@@ -117,3 +119,14 @@ def test_transcribe_and_save(sample_audio_file, output_dir):
     
     total_duration = midi.get_end_time()
     assert 29 <= total_duration <= 31, f"Expected duration between 29 and 31 seconds, got {total_duration:.2f}s"
+
+
+def test_transcription(tmp_path):
+    """Test that transcribe_stem correctly transcribes a simple tone to MIDI"""
+    wav = librosa.tone(440, duration=3.0, sr=16000)
+    sf.write(tmp_path/"tone.wav", wav, 16000)
+    
+    midi = transcribe_stem(tmp_path/"tone.wav")
+    
+    assert len(midi.instruments[0].notes) > 0, "No notes in MIDI"
+    assert midi.resolution == 480, f"Expected PPQ of 480, got {midi.resolution}"
