@@ -62,7 +62,9 @@ Tokoroten（ところてん）は、音楽クリエイターのためのWebベ�
 - PostgreSQL
 - Librosa, Pydub, SoundFile
 - Mido, PrettyMIDI
-- PyTorch, TensorFlow
+- PyTorch, TensorFlow, Transformers
+- MT3 (MIDI-Text-to-Text Transformer)
+- Demucs (音源分離)
 - Google AI Python SDK (Gemini), OpenAI Python Library
 
 ### インフラストラクチャ
@@ -76,6 +78,7 @@ Tokoroten（ところてん）は、音楽クリエイターのためのWebベ�
 - Python 3.10以上
 - Docker, Docker Compose
 - GPU 推奨 (A10G / RTX4090) CPU 時は 4‑5× 遅延
+- MT3モデル: 約1GB（初回ダウンロード時）
 - （その他必要に応じて追加予定）
 
 ## 🚀 クイックスタート
@@ -141,6 +144,11 @@ Tokoroten-project/
 ## 📜 ライセンス
 
 [MIT License](LICENSE) (または適切なライセンスを選択)
+
+## 🙏 謝辞
+
+- [MT3 (MIDI-Text-to-Text Transformer)](https://github.com/magenta/mt3) - Apache-2.0 ライセンス
+- [Demucs](https://github.com/facebookresearch/demucs) - MIT ライセンス
 
 ## 📞 連絡先
 
