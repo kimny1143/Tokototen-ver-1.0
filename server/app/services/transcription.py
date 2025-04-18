@@ -80,9 +80,10 @@ def transcribe_stem(stem_path: Path) -> pretty_midi.PrettyMIDI:
                 # Set correct resolution
                 midi.resolution = 480
                 
-                if len(midi.get_tempo_changes()[1]) > 0 and abs(midi.get_tempo_changes()[1][0] - 120.0) > 1.0:
+                tempo_changes = midi.get_tempo_changes()[1]
+                if tempo_changes and abs(tempo_changes[0] - 120.0) > 1.0:
                     if __debug__:
-                        print(f"Adjusting tempo from {midi.get_tempo_changes()[1][0]} to 120.0 BPM")
+                        print(f"Adjusting tempo from {tempo_changes[0]} to 120.0 BPM")
                     return create_midi_with_correct_tempo(midi, duration)
                 
                 return midi
